@@ -1,6 +1,6 @@
 # AstrBot ACM Assistant
 
-基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 插件接口的第一阶段原型，仅实现 `/最近比赛`。不包含机器人本体、定时推送、订阅或账号查询。
+基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 ACM 助手插件，支持近期比赛查询与周赛管理。不包含机器人本体、定时推送、订阅或账号查询。
 
 ## 安装
 
@@ -26,7 +26,7 @@ https://github.com/mushanling/astrbot_plugin_acm_assistant
 py -3.12 scripts/package_plugin.py
 ```
 
-输出在 `dist/astrbot_plugin_acm_assistant-vX.Y.Z.zip`。压缩包内只有一个 `astrbot_plugin_acm_assistant/` 目录，包含 `main.py`、`metadata.yaml`、`_conf_schema.json`、`requirements.txt` 和 `README.md`，不包含 Git 元数据、工作流、凭据或 SQLite 缓存。后续添加运行所需文件时，应同步更新 `scripts/package_plugin.py` 的打包文件列表。
+输出在 `dist/astrbot_plugin_acm_assistant-vX.Y.Z.zip`。压缩包内只有一个 `astrbot_plugin_acm_assistant/` 目录，包含 `main.py`、`training.py`、`metadata.yaml`、`_conf_schema.json`、`requirements.txt` 和 `README.md`，不包含 Git 元数据、工作流、凭据、测试或 SQLite 数据库。后续添加运行所需文件时，应同步更新 `scripts/package_plugin.py` 的打包文件列表。
 
 ## 配置
 
@@ -39,6 +39,7 @@ py -3.12 scripts/package_plugin.py
 | `upcoming_days` | 7 | 未来 1–30 天 |
 | `max_contests` | 10 | 合并后显示最早的 1–20 场 |
 | `cache_ttl_seconds` | 900 | 缓存 300–3600 秒 |
+| `plugin_admins` | `[]` | 插件独立管理员的平台用户 ID 列表，如 `["123456789"]` |
 
 没有 CLIST 凭据时仍可查询 Codeforces，AtCoder、牛客会明确提示未配置。
 
@@ -49,6 +50,29 @@ py -3.12 scripts/package_plugin.py
 ```
 
 通过 AstrBot 配置的命令唤醒前缀调用；默认前缀通常为 `/`。只查询尚未开始、开始时间位于未来指定天数内的比赛，不包含正在进行或已结束的比赛。三个平台合并、去重、按开始时间排序，显示平台、标题、北京时间（固定 UTC+8）、时长和比赛链接。命令直接回复文本，不使用 LLM。
+
+## 周赛系统
+
+```text
+/本周周赛
+/周赛 添加 https://atcoder.jp/contests/abc480
+/周赛 添加 https://vjudge.net/contest/600000
+/周赛 添加 https://ac.nowcoder.com/acm/contest/95323
+/周赛 删除
+/周赛 删除 1
+```
+
+`/本周周赛` 对所有用户开放，按北京时间（UTC+8）的自然周，即周一 00:00 至下周一 00:00，显示**开始时间在本周**的自动 ABC 与手动登记比赛，包含本周已结束的比赛，按开始时间排序。展示标题、平台、起止时间、链接及登记来源。跨周比赛按开始时间归属；登记未来周的比赛成功后会提示，并在开始当周显示。周赛日程在本插件所有群聊和私聊间共享。
+
+默认按需从 AtCoder 官方比赛列表的即将开始、进行中、近期结束分区同步本周 ABC（`abc数字`），不需要 CLIST 凭据，也不依赖 `/最近比赛` 的查询天数或条数限制。沿用 `cache_ttl_seconds` 缓存时间，失败后至少等待 60 秒重试，最多采用 24 小时旧缓存并提示。同步失败不影响数据库内已登记周赛的显示；没有后台定时任务。
+
+添加命令直接读取公开比赛页面，自动获取标题、开始和结束时间：AtCoder 使用带时区的比赛时间，VJudge 使用 `dataJson` 的 `begin/end`，牛客使用 `window.pageInfo` 的 `startTime/endTime`，后两者按毫秒时间戳解析。无需手动填写时间。链接只接受这三个域名的比赛主页；忽略查询参数和 `#overview` 等片段，统一为 HTTPS 并去重。无法访问、需要登录、时间未公布或解析失败时明确报错，不写入不完整记录；不会绕过登录或验证码。上游页面结构变化时需更新解析逻辑。
+
+管理权限为 **AstrBot 超级管理员或 `plugin_admins` 白名单成员**。使用 AstrBot 事件的 `is_admin()` 识别超级管理员，普通群管理员不会自动获得管理权限。白名单只授予本插件的周赛添加、列出可删除比赛和删除权限，不修改 AstrBot 全局管理员配置。留空时仅超级管理员可以管理；修改白名单后保存并重载插件。
+
+`/周赛 删除` 先同步本周 ABC，再列出所有周已登记且未删除的比赛及编号，自动 ABC 也可删除。编号列表仅对当前操作者、当前会话有效，5 分钟后或插件重载后失效；删除时再次检查权限和记录版本，避免其他管理员操作后误删。发送 `/周赛 删除 <编号>` 完成一次删除后，需重新获取列表。删除 ABC 会持久保留排除记录，刷新和重启不会将它自动加回；需要恢复时可使用添加命令重新登记同一链接。
+
+升级时会在原有 `contests.sqlite3` 中自动新增 `training_contests` 表及索引，保留现有 `source_cache` 缓存。周赛表保存唯一链接、标题、平台、起止时间、自动/手动来源、登记者、删除标记和版本号；数据库仍位于 AstrBot 数据目录，更新插件不会覆盖。
 
 ## 数据来源
 
@@ -70,9 +94,13 @@ CLIST 使用 Authorization 请求头鉴权，分页固定访问 CLIST 域名；�
 
 ## 验证范围
 
-按需求不提供或运行测试，不启动 AstrBot、不接入 QQ、不发送机器人消息。仅进行 Ruff 格式化与静态检查、Git 提交内容审阅；真实 API 凭据、QQ 命令触发与实际消息展示需安装后联调。
+周赛回归测试使用临时 SQLite 数据库与模拟 AstrBot 事件，覆盖页面解析、北京时间周边界、管理员权限、删除编号隔离和失效、ABC 删除后不复活及网络失败降级。不启动 AstrBot、不接入 QQ、不发送机器人消息；真实 QQ 命令触发与实际消息展示需安装后联调。
+
+开发验证：安装 `requirements.txt` 和 `pytest pytest-asyncio ruff` 后运行 `python -m pytest -q`、`ruff check .`、`ruff format --check .`。打包命令见上文。
 
 ## 更新记录
 
+- **v0.2.0**：新增持久化周赛系统、自动 ABC、AtCoder/VJudge/牛客链接信息采集；管理权限支持 AstrBot 超级管理员与插件独立白名单；加入带有效期、操作者和会话隔离的编号删除流程。
 - **v0.1.2**：简化比赛消息标题，移除“北京时间 UTC+8”和消息末尾的数据来源说明；标题与比赛、相邻比赛之间统一空一行。比赛时间仍按北京时间显示。
 - **v0.1.1**：修复 AtCoder、牛客 CLIST 请求的排序参数：将无效的 `order_by=start,id` 改为 `order_by=start`，由 CLIST 自动补充 `id` 排序，避免排序字段无效导致的 HTTP 400。更新后保留原配置及 SQLite 缓存；若上次请求失败尚不足 60 秒，请稍后再调用命令。
+

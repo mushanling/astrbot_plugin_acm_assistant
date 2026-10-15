@@ -31,6 +31,7 @@ def main() -> None:
     plugin_name = "astrbot_plugin_acm_assistant"
     files = (
         "main.py",
+        "training.py",
         "metadata.yaml",
         "_conf_schema.json",
         "requirements.txt",

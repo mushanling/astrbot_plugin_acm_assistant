@@ -3,6 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import monotonic
 
 import aiohttp
 import aiosqlite
@@ -10,6 +11,8 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+
+from .training import ContestError, TrainingService, format_contest, week_bounds
 
 UTC = timezone.utc
 BEIJING = timezone(timedelta(hours=8))
@@ -36,6 +39,9 @@ class AcmAssistant(Star):
         )
         self.lock = asyncio.Lock()
         self.session: aiohttp.ClientSession | None = None
+        self.training: TrainingService | None = None
+        # A numbered deletion list belongs to one sender in one conversation.
+        self.delete_selections: dict[tuple[str, str], tuple[float, list[dict]]] = {}
 
     async def initialize(self) -> None:
         """Create the persistent cache and HTTP session.
@@ -51,12 +57,14 @@ class AcmAssistant(Star):
                 "source TEXT PRIMARY KEY, payload TEXT, updated_at REAL NOT NULL, "
                 "attempted_at REAL NOT NULL)"
             )
+            await TrainingService.initialize(db)
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.2"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.0"},
             trust_env=True,
         )
+        self.training = TrainingService(self.session)
 
     async def fetch_contests(self, source: str, days: int) -> list[dict]:
         """Fetch and normalize one platform's contests without touching the cache.
@@ -320,9 +328,137 @@ class AcmAssistant(Star):
             message = "比赛查询失败，请管理员检查插件配置和缓存目录读写权限。"
         yield event.plain_result(message)
 
+    def is_training_admin(self, event: AstrMessageEvent) -> bool:
+        """Allow AstrBot administrators or explicitly configured plugin admins."""
+        if event.is_admin():
+            return True
+        sender = str(event.get_sender_id())
+        whitelist = self.config.get("plugin_admins", [])
+        if not isinstance(whitelist, list) or not sender:
+            return False
+        return sender in {str(value).strip() for value in whitelist}
+
+    @filter.command("本周周赛")
+    async def weekly_contests(
+        self, event: AstrMessageEvent
+    ) -> AsyncIterator[MessageEventResult]:
+        """Show automatic ABCs and registered contests starting this calendar week."""
+        event.stop_event()
+        try:
+            if self.training is None:
+                raise RuntimeError("Training service is not initialized")
+            ttl = max(300, min(3600, int(self.config.get("cache_ttl_seconds", 900))))
+            async with self.lock, aiosqlite.connect(self.db_path) as db:
+                notice = await self.training.sync_abc(db, ttl)
+                entries = await self.training.list_contests(db, weekly=True)
+            begin, end = week_bounds()
+            monday = datetime.fromtimestamp(begin, BEIJING).strftime("%m-%d")
+            sunday = datetime.fromtimestamp(end - 1, BEIJING).strftime("%m-%d")
+            lines = [f"本周周赛｜{monday} ～ {sunday}"]
+            for index, item in enumerate(entries, 1):
+                origin = "自动 ABC" if item["origin"] == "auto" else "手动登记"
+                lines.append(f"{index}. {format_contest(item)}\n{origin}")
+            if not entries:
+                lines.append("暂无已登记周赛。")
+            if notice:
+                lines.append(notice)
+            message = "\n\n".join(lines)
+        except Exception as exc:
+            logger.error("Weekly contest query failed (%s)", type(exc).__name__)
+            message = "周赛查询失败，请管理员检查网络及数据库目录读写权限。"
+        yield event.plain_result(message)
+
+    async def manage_training(
+        self, event: AstrMessageEvent, action: str, value: str
+    ) -> str:
+        """Apply an authorized management command under the shared database lock."""
+        if self.training is None:
+            raise RuntimeError("Training service is not initialized")
+        key = (event.unified_msg_origin, str(event.get_sender_id()))
+        now = monotonic()
+        self.delete_selections = {
+            owner: selection
+            for owner, selection in self.delete_selections.items()
+            if now - selection[0] < 300
+        }
+        if action == "添加" and value:
+            async with self.lock, aiosqlite.connect(self.db_path) as db:
+                item = await self.training.add(db, value, key[1])
+            begin, end = week_bounds()
+            suffix = (
+                ""
+                if begin <= item["start"] < end
+                else "\n该比赛不在本周，按开始时间归属对应自然周。"
+            )
+            return f"已添加周赛：\n{format_contest(item)}{suffix}"
+        if action != "删除":
+            return "用法：\n/周赛 添加 <链接>\n/周赛 删除\n/周赛 删除 <编号>"
+        async with self.lock, aiosqlite.connect(self.db_path) as db:
+            if value:
+                selection = self.delete_selections.get(key)
+                if selection is None or monotonic() - selection[0] >= 300:
+                    self.delete_selections.pop(key, None)
+                    return "请先发送 /周赛 删除 获取编号（有效期 5 分钟）。"
+                if not value.isascii() or not value.isdecimal() or len(value) > 9:
+                    return "编号无效，请使用刚刚列出的比赛编号。"
+                number = int(value)
+                if not 1 <= number <= len(selection[1]):
+                    return "编号无效，请使用刚刚列出的比赛编号。"
+                item = selection[1][number - 1]
+                changed = await self.training.delete(db, item["id"], item["revision"])
+                self.delete_selections.pop(key, None)
+                if not changed:
+                    return "该比赛已被删除或信息发生变化，请重新发送 /周赛 删除。"
+                return f"已删除周赛：{item['title']}\n{item['url']}"
+            ttl = max(300, min(3600, int(self.config.get("cache_ttl_seconds", 900))))
+            notice = await self.training.sync_abc(db, ttl)
+            entries = await self.training.list_contests(db)
+            self.delete_selections.pop(key, None)
+            if not entries:
+                return "暂无可删除的周赛。" + (f"\n{notice}" if notice else "")
+            # Bound transient selection memory even if many admins request lists.
+            if len(self.delete_selections) >= 1000:
+                oldest = min(
+                    self.delete_selections, key=lambda k: self.delete_selections[k][0]
+                )
+                self.delete_selections.pop(oldest)
+            self.delete_selections[key] = (monotonic(), entries)
+        lines = ["可删除周赛｜编号 5 分钟内有效（含其他周已登记比赛）"]
+        for index, item in enumerate(entries, 1):
+            origin = "自动 ABC" if item["origin"] == "auto" else "手动登记"
+            lines.append(f"{index}. {format_contest(item)}\n{origin}")
+        lines.append("发送 /周赛 删除 <编号> 删除对应比赛；每次删除后需重新获取列表。")
+        if notice:
+            lines.append(notice)
+        return "\n\n".join(lines)
+
+    @filter.command("周赛")
+    async def training_command(
+        self, event: AstrMessageEvent, action: str = "", value: str = ""
+    ) -> AsyncIterator[MessageEventResult]:
+        """Manage contests using AstrBot admins plus the plugin's own whitelist."""
+        event.stop_event()
+        if not self.is_training_admin(event):
+            yield event.plain_result(
+                "仅 AstrBot 超级管理员或插件白名单管理员可管理周赛。"
+            )
+            return
+        try:
+            message = await self.manage_training(event, action, value)
+        except ContestError as exc:
+            message = str(exc)
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            message = "比赛页面请求失败或超时，请稍后重试；未添加比赛。"
+        except Exception as exc:
+            logger.error("Training contest command failed (%s)", type(exc).__name__)
+            message = "周赛操作失败，请管理员检查网络及数据库目录读写权限。"
+        yield event.plain_result(message)
+
     async def terminate(self) -> None:
         """Close HTTP resources when the plugin is disabled or reloaded."""
         async with self.lock:
+            self.delete_selections.clear()
+            self.training = None
             if self.session is not None:
                 await self.session.close()
                 self.session = None

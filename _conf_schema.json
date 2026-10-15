@@ -1,4 +1,10 @@
 {
+  "plugin_admins": {
+    "description": "插件独立管理员白名单",
+    "type": "list",
+    "default": [],
+    "hint": "填写管理员的平台用户 ID（如 QQ 号）。AstrBot 超级管理员始终有权限；群管理员身份不会自动获得权限。白名单仅赋予本插件周赛管理权限。"
+  },
   "clist_username": {
     "description": "CLIST 用户名",
     "type": "string",
@@ -31,3 +37,4 @@
     "hint": "范围 300–3600；请求失败时最多沿用 24 小时旧缓存，并提示更新时间。"
   }
 }
+
