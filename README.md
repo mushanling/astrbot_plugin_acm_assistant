@@ -4,6 +4,8 @@
 
 ## 安装
 
+推荐从 [Releases](https://github.com/mushanling/astrbot_plugin_acm_assistant/releases) 下载对应版本的 `astrbot_plugin_acm_assistant-vX.Y.Z.zip`，在 AstrBot 插件管理中使用本地 ZIP 上传安装，无需手动解压。仓库为私有时，下载需要登录有访问权限的 GitHub 账户；下载后上传 ZIP 不需要 AstrBot 连接私有仓库。
+
 在 AstrBot 的插件管理页面，使用本仓库 URL 安装：
 
 ```text
@@ -13,6 +15,18 @@ https://github.com/mushanling/astrbot_plugin_acm_assistant
 仓库当前为私有仓库，普通 URL 安装需要先具备访问权限。也可先在已登录 GitHub 的本机克隆，然后将插件目录复制到运行 AstrBot 的 `data/plugins/` 下，重启或重载插件。无需修改 AstrBot 本体。
 
 需要 Python 3.10+、AstrBot 4.16+（4.x）。插件依赖见 `requirements.txt`，由 AstrBot 插件安装流程安装；手动复制时需在 AstrBot 使用的 Python 环境中安装这些依赖。
+
+## 版本打包
+
+每次更新 `metadata.yaml` 中的版本并推送同名 Git 标签（例如 `v0.1.1`），GitHub Actions 会自动打包并将 ZIP 附加到对应的 GitHub Release。标签必须与元数据版本一致，否则停止发布。可在仓库 Actions 页面查看执行状态或重跑失败任务。流程仅打包，不运行插件测试。
+
+也可在本地直接生成当前版本安装包，无需额外安装打包依赖：
+
+```powershell
+py -3.12 scripts/package_plugin.py
+```
+
+输出在 `dist/astrbot_plugin_acm_assistant-vX.Y.Z.zip`。压缩包内只有一个 `astrbot_plugin_acm_assistant/` 目录，包含 `main.py`、`metadata.yaml`、`_conf_schema.json`、`requirements.txt` 和 `README.md`，不包含 Git 元数据、工作流、凭据或 SQLite 缓存。后续添加运行所需文件时，应同步更新 `scripts/package_plugin.py` 的打包文件列表。
 
 ## 配置
 

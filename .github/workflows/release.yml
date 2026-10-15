@@ -1,0 +1,43 @@
+name: Package plugin release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Package plugin
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/package_plugin.py --version "$RELEASE_TAG"
+
+      - name: Publish ZIP to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag \
+              --title "AstrBot ACM Assistant $RELEASE_TAG" \
+              --notes "Download the attached astrbot_plugin_acm_assistant ZIP and upload it through AstrBot plugin management."
+          fi
+          gh release upload "$RELEASE_TAG" "dist/astrbot_plugin_acm_assistant-$RELEASE_TAG.zip" --clobber
