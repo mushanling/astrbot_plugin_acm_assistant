@@ -1,0 +1,33 @@
+{
+  "clist_username": {
+    "description": "CLIST 用户名",
+    "type": "string",
+    "default": "",
+    "hint": "CLIST 账户用户名；AtCoder 与牛客共用此账户。"
+  },
+  "clist_api_key": {
+    "description": "CLIST API Key",
+    "type": "string",
+    "default": "",
+    "secret": true,
+    "hint": "登录 https://clist.by/api/v4/doc/ 获取；不要填写在代码或聊天中。"
+  },
+  "upcoming_days": {
+    "description": "查询未来天数",
+    "type": "int",
+    "default": 7,
+    "hint": "范围 1–30；只列尚未开始的比赛。"
+  },
+  "max_contests": {
+    "description": "最多显示比赛数",
+    "type": "int",
+    "default": 10,
+    "hint": "范围 1–20；所有平台合并后按开始时间排序。"
+  },
+  "cache_ttl_seconds": {
+    "description": "缓存有效期（秒）",
+    "type": "int",
+    "default": 900,
+    "hint": "范围 300–3600；请求失败时最多沿用 24 小时旧缓存，并提示更新时间。"
+  }
+}
