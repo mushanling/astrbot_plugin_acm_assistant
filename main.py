@@ -54,7 +54,7 @@ class AcmAssistant(Star):
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.1"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.2"},
             trust_env=True,
         )
 
@@ -292,7 +292,7 @@ class AcmAssistant(Star):
                 unique.values(),
                 key=lambda item: (item["start"], item["source"], item["url"]),
             )
-            lines = [f"最近比赛｜未来 {days} 天｜北京时间 UTC+8"]
+            lines = [f"最近比赛｜未来 {days} 天"]
             for index, item in enumerate(upcoming[:limit], 1):
                 start = datetime.fromtimestamp(item["start"], BEIJING).strftime(
                     "%m-%d %H:%M"
@@ -301,7 +301,7 @@ class AcmAssistant(Star):
                 hours, minutes = divmod(minutes, 60)
                 duration = f"{hours}小时{minutes}分钟" if hours else f"{minutes}分钟"
                 lines.append(
-                    f"\n{index}. [{item['source']}] {item['title']}\n"
+                    f"{index}. [{item['source']}] {item['title']}\n"
                     f"{start}｜时长 {duration}\n{item['url']}"
                 )
             if not upcoming:
@@ -311,11 +311,10 @@ class AcmAssistant(Star):
                     else "暂无即将开始的比赛。"
                 )
             if len(upcoming) > limit:
-                lines.append(f"\n仅显示最早的 {limit} 场比赛。")
+                lines.append(f"仅显示最早的 {limit} 场比赛。")
             if notices:
-                lines.append("\n数据提示：\n" + "\n".join(notices))
-            lines.append("\n数据来源：Codeforces 官方 API；AtCoder / 牛客：CLIST。")
-            message = "\n".join(lines)
+                lines.append("数据提示：\n" + "\n".join(notices))
+            message = "\n\n".join(lines)
         except Exception as exc:
             logger.error("Upcoming contest command failed (%s)", type(exc).__name__)
             message = "比赛查询失败，请管理员检查插件配置和缓存目录读写权限。"
