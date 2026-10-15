@@ -54,7 +54,7 @@ class AcmAssistant(Star):
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.0"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.1"},
             trust_env=True,
         )
 
@@ -111,7 +111,9 @@ class AcmAssistant(Star):
                 "start__lte": (now + timedelta(days=days + 1)).strftime(
                     "%Y-%m-%dT%H:%M:%S"
                 ),
-                "order_by": "start,id",
+                # CLIST appends id for stable pagination. Tastypie treats a
+                # comma-separated value as one invalid field name.
+                "order_by": "start",
                 "limit": 100,
                 "offset": 0,
                 "format": "json",

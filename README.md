@@ -71,3 +71,7 @@ CLIST 使用 Authorization 请求头鉴权，分页固定访问 CLIST 域名；�
 ## 验证范围
 
 按需求不提供或运行测试，不启动 AstrBot、不接入 QQ、不发送机器人消息。仅进行 Ruff 格式化与静态检查、Git 提交内容审阅；真实 API 凭据、QQ 命令触发与实际消息展示需安装后联调。
+
+## 更新记录
+
+- **v0.1.1**：修复 AtCoder、牛客 CLIST 请求的排序参数：将无效的 `order_by=start,id` 改为 `order_by=start`，由 CLIST 自动补充 `id` 排序，避免排序字段无效导致的 HTTP 400。更新后保留原配置及 SQLite 缓存；若上次请求失败尚不足 60 秒，请稍后再调用命令。
