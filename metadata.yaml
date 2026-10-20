@@ -1,7 +1,8 @@
 name: astrbot_plugin_acm_assistant
 display_name: AstrBot ACM Assistant
-desc: 查询 AtCoder、Codeforces、牛客近期比赛，使用 SQLite 缓存。
-version: v0.1.3
+desc: 查询近期比赛与本周周赛，自动收录 ABC，支持登记 AtCoder、VJudge、牛客比赛。
+version: v0.2.1
 author: mushanling
 repo: https://github.com/mushanling/astrbot_plugin_acm_assistant
 astrbot_version: ">=4.16,<5"
+
