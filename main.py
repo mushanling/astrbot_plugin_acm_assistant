@@ -54,7 +54,7 @@ class AcmAssistant(Star):
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.2"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.1.3"},
             trust_env=True,
         )
 
@@ -261,7 +261,7 @@ class AcmAssistant(Star):
     async def recent_contests(
         self, event: AstrMessageEvent
     ) -> AsyncIterator[MessageEventResult]:
-        """Reply with upcoming contests ordered by start time.
+        """Reply with all platforms' contests in the next three days.
 
         Args:
             event: Incoming AstrBot command event.
@@ -270,13 +270,69 @@ class AcmAssistant(Star):
             A plain-text contest list or an actionable error message.
         """
         event.stop_event()
+        yield event.plain_result(await self.contest_message(SOURCES, 3))
+
+    @filter.command("牛客比赛", alias={"牛客"})
+    async def nowcoder_contests(
+        self, event: AstrMessageEvent
+    ) -> AsyncIterator[MessageEventResult]:
+        """Reply with Nowcoder contests in the next five days.
+
+        Args:
+            event: Incoming AstrBot command event.
+
+        Yields:
+            A plain-text contest list or an actionable error message.
+        """
+        event.stop_event()
+        yield event.plain_result(await self.contest_message(("牛客",), 5))
+
+    @filter.command("atc比赛", alias={"atc"})
+    async def atcoder_contests(
+        self, event: AstrMessageEvent
+    ) -> AsyncIterator[MessageEventResult]:
+        """Reply with AtCoder contests in the next five days.
+
+        Args:
+            event: Incoming AstrBot command event.
+
+        Yields:
+            A plain-text contest list or an actionable error message.
+        """
+        event.stop_event()
+        yield event.plain_result(await self.contest_message(("AtCoder",), 5))
+
+    @filter.command("cf比赛", alias={"cf"})
+    async def codeforces_contests(
+        self, event: AstrMessageEvent
+    ) -> AsyncIterator[MessageEventResult]:
+        """Reply with Codeforces contests in the next five days.
+
+        Args:
+            event: Incoming AstrBot command event.
+
+        Yields:
+            A plain-text contest list or an actionable error message.
+        """
+        event.stop_event()
+        yield event.plain_result(await self.contest_message(("Codeforces",), 5))
+
+    async def contest_message(self, sources: tuple[str, ...], days: int) -> str:
+        """Build the contest reply shared by the four command handlers.
+
+        Args:
+            sources: Platforms to query, without fetching unrelated sources.
+            days: Upcoming display window in days.
+
+        Returns:
+            Formatted contest information or an actionable error message.
+        """
         try:
-            days = max(1, min(30, int(self.config.get("upcoming_days", 7))))
             limit = max(1, min(20, int(self.config.get("max_contests", 10))))
             ttl = max(300, min(3600, int(self.config.get("cache_ttl_seconds", 900))))
             contests, notices = [], []
             async with self.lock, aiosqlite.connect(self.db_path) as db:
-                for source in SOURCES:
+                for source in sources:
                     entries, notice = await self.cached_contests(db, source, days, ttl)
                     contests.extend({**entry, "source": source} for entry in entries)
                     if notice:
@@ -292,7 +348,8 @@ class AcmAssistant(Star):
                 unique.values(),
                 key=lambda item: (item["start"], item["source"], item["url"]),
             )
-            lines = [f"最近比赛｜未来 {days} 天"]
+            title = "最近比赛" if len(sources) > 1 else f"{sources[0]}比赛"
+            lines = [f"{title}｜未来 {days} 天"]
             for index, item in enumerate(upcoming[:limit], 1):
                 start = datetime.fromtimestamp(item["start"], BEIJING).strftime(
                     "%m-%d %H:%M"
@@ -318,7 +375,7 @@ class AcmAssistant(Star):
         except Exception as exc:
             logger.error("Upcoming contest command failed (%s)", type(exc).__name__)
             message = "比赛查询失败，请管理员检查插件配置和缓存目录读写权限。"
-        yield event.plain_result(message)
+        return message
 
     async def terminate(self) -> None:
         """Close HTTP resources when the plugin is disabled or reloaded."""

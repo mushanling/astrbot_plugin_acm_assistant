@@ -12,17 +12,11 @@
     "secret": true,
     "hint": "登录 https://clist.by/api/v4/doc/ 获取；不要填写在代码或聊天中。"
   },
-  "upcoming_days": {
-    "description": "查询未来天数",
-    "type": "int",
-    "default": 7,
-    "hint": "范围 1–30；只列尚未开始的比赛。"
-  },
   "max_contests": {
     "description": "最多显示比赛数",
     "type": "int",
     "default": 10,
-    "hint": "范围 1–20；所有平台合并后按开始时间排序。"
+    "hint": "范围 1–20；每条指令均按开始时间排序并限制显示数量。"
   },
   "cache_ttl_seconds": {
     "description": "缓存有效期（秒）",
