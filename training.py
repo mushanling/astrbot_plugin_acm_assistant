@@ -323,9 +323,18 @@ class TrainingService:
 
 
 def format_contest(item: dict) -> str:
-    """Format both endpoints in Beijing time, including cross-day contests."""
-    start, end = (
-        datetime.fromtimestamp(item[field], BEIJING).strftime("%m-%d %H:%M")
-        for field in ("start", "end")
+    """Format a contest with its Beijing start time and duration.
+
+    Args:
+        item: Contest fields including source, title, start, end, and url.
+
+    Returns:
+        Three lines containing the title, start time with duration, and URL.
+    """
+    start = datetime.fromtimestamp(item["start"], BEIJING).strftime("%m-%d %H:%M")
+    minutes = (item["end"] - item["start"]) // 60
+    hours, minutes = divmod(minutes, 60)
+    duration = f"{hours}小时{minutes}分钟" if hours else f"{minutes}分钟"
+    return (
+        f"[{item['source']}] {item['title']}\n{start}｜时长 {duration}\n{item['url']}"
     )
-    return f"[{item['source']}] {item['title']}\n{start} ～ {end}\n{item['url']}"

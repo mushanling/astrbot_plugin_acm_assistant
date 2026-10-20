@@ -61,7 +61,7 @@ class AcmAssistant(Star):
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.2"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.3"},
             trust_env=True,
         )
         self.training = TrainingService(self.session)
@@ -265,11 +265,11 @@ class AcmAssistant(Star):
             "请检查网络、API 配额或凭据（60 秒后可重试）。",
         )
 
-    @filter.command("help", alias={"acm帮助"}, priority=100)
+    @filter.command("acmhelp")
     async def help_menu(
         self, event: AstrMessageEvent
     ) -> AsyncIterator[MessageEventResult]:
-        """Show the plugin menu before AstrBot's default help handler.
+        """Show the plugin menu through its dedicated command.
 
         Args:
             event: Incoming AstrBot command event.
@@ -291,7 +291,7 @@ class AcmAssistant(Star):
             "/周赛 添加 <链接> — 登记 AtCoder、VJudge 或牛客比赛\n"
             "/周赛 删除 — 获取可删除比赛及编号\n"
             "/周赛 删除 <编号> — 删除对应比赛，编号有效期 5 分钟\n\n"
-            "/help 或 /acm帮助 — 查看本菜单"
+            "/acmhelp — 查看本菜单"
         )
 
     @filter.command("最近比赛")
@@ -442,8 +442,7 @@ class AcmAssistant(Star):
             sunday = datetime.fromtimestamp(end - 1, BEIJING).strftime("%m-%d")
             lines = [f"本周周赛｜{monday} ～ {sunday}"]
             for index, item in enumerate(entries, 1):
-                origin = "自动 ABC" if item["origin"] == "auto" else "手动登记"
-                lines.append(f"{index}. {format_contest(item)}\n{origin}")
+                lines.append(f"{index}. {format_contest(item)}")
             if not entries:
                 lines.append("暂无已登记周赛。")
             if notice:
@@ -511,8 +510,7 @@ class AcmAssistant(Star):
             self.delete_selections[key] = (monotonic(), entries)
         lines = ["可删除周赛｜编号 5 分钟内有效（含其他周已登记比赛）"]
         for index, item in enumerate(entries, 1):
-            origin = "自动 ABC" if item["origin"] == "auto" else "手动登记"
-            lines.append(f"{index}. {format_contest(item)}\n{origin}")
+            lines.append(f"{index}. {format_contest(item)}")
         lines.append("发送 /周赛 删除 <编号> 删除对应比赛；每次删除后需重新获取列表。")
         if notice:
             lines.append(notice)
