@@ -61,7 +61,7 @@ class AcmAssistant(Star):
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.1"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.2"},
             trust_env=True,
         )
         self.training = TrainingService(self.session)
@@ -263,6 +263,35 @@ class AcmAssistant(Star):
             [],
             f"{source}：暂不可用，无有效缓存；"
             "请检查网络、API 配额或凭据（60 秒后可重试）。",
+        )
+
+    @filter.command("help", alias={"acm帮助"}, priority=100)
+    async def help_menu(
+        self, event: AstrMessageEvent
+    ) -> AsyncIterator[MessageEventResult]:
+        """Show the plugin menu before AstrBot's default help handler.
+
+        Args:
+            event: Incoming AstrBot command event.
+
+        Yields:
+            A plain-text menu of public and administrator commands.
+        """
+        event.stop_event()
+        yield event.plain_result(
+            "AstrBot ACM Assistant｜帮助\n\n"
+            "比赛查询\n"
+            "/最近比赛 — 所有平台，未来 3 天\n"
+            "/牛客 或 /牛客比赛 — 牛客，未来 5 天\n"
+            "/atc 或 /atc比赛 — AtCoder，未来 5 天\n"
+            "/cf 或 /cf比赛 — Codeforces，未来 5 天\n\n"
+            "周赛查询\n"
+            "/本周周赛 — 查看本周自动收录的 ABC 和手动登记比赛\n\n"
+            "周赛管理（仅 AstrBot 超级管理员或插件白名单管理员）\n"
+            "/周赛 添加 <链接> — 登记 AtCoder、VJudge 或牛客比赛\n"
+            "/周赛 删除 — 获取可删除比赛及编号\n"
+            "/周赛 删除 <编号> — 删除对应比赛，编号有效期 5 分钟\n\n"
+            "/help 或 /acm帮助 — 查看本菜单"
         )
 
     @filter.command("最近比赛")

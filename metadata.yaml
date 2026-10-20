@@ -1,7 +1,7 @@
 name: astrbot_plugin_acm_assistant
 display_name: AstrBot ACM Assistant
 desc: 查询近期比赛与本周周赛，自动收录 ABC，支持登记 AtCoder、VJudge、牛客比赛。
-version: v0.2.1
+version: v0.2.2
 author: mushanling
 repo: https://github.com/mushanling/astrbot_plugin_acm_assistant
 astrbot_version: ">=4.16,<5"
