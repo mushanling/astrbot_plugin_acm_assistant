@@ -32,6 +32,7 @@ def main() -> None:
     files = (
         "main.py",
         "training.py",
+        "todo.py",
         "metadata.yaml",
         "_conf_schema.json",
         "requirements.txt",

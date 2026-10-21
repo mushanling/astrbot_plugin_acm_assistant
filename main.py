@@ -12,6 +12,7 @@ from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
 from astrbot.api.star import Context, Star
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
+from .todo import TodoError, TodoService
 from .training import ContestError, TrainingService, format_contest, week_bounds
 
 UTC = timezone.utc
@@ -58,10 +59,11 @@ class AcmAssistant(Star):
                 "attempted_at REAL NOT NULL)"
             )
             await TrainingService.initialize(db)
+            await TodoService.initialize(db)
             await db.commit()
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=15),
-            headers={"User-Agent": "AstrBot-ACM-Assistant/0.2.3"},
+            headers={"User-Agent": "AstrBot-ACM-Assistant/0.3.0"},
             trust_env=True,
         )
         self.training = TrainingService(self.session)
@@ -291,6 +293,11 @@ class AcmAssistant(Star):
             "/周赛 添加 <链接> — 登记 AtCoder、VJudge 或牛客比赛\n"
             "/周赛 删除 — 获取可删除比赛及编号\n"
             "/周赛 删除 <编号> — 删除对应比赛，编号有效期 5 分钟\n\n"
+            "个人 TODO（仅私聊）\n"
+            "/todo — 查看当前待办\n"
+            "/todo <题目链接> — 添加题目，已完成题目可重新加入\n"
+            "/todo 完成 <编号> — 标记完成\n"
+            "/todo 删除 <编号> — 删除待办\n\n"
             "/acmhelp — 查看本菜单"
         )
 
@@ -536,6 +543,39 @@ class AcmAssistant(Star):
         except Exception as exc:
             logger.error("Training contest command failed (%s)", type(exc).__name__)
             message = "周赛操作失败，请管理员检查网络及数据库目录读写权限。"
+        yield event.plain_result(message)
+
+    @filter.command("todo")
+    async def todo_command(
+        self, event: AstrMessageEvent, action: str = "", value: str = ""
+    ) -> AsyncIterator[MessageEventResult]:
+        """Manage the sender's personal problems in private messages only."""
+        event.stop_event()
+        if event.get_message_type().value != "FriendMessage":
+            yield event.plain_result("TODO 仅在私聊中开放，请私聊机器人使用 /todo。")
+            return
+        owner = (str(event.get_platform_id() or ""), str(event.get_sender_id() or ""))
+        if not all(owner):
+            yield event.plain_result("无法识别平台或用户，暂时无法使用 TODO。")
+            return
+        try:
+            async with self.lock, aiosqlite.connect(self.db_path) as db:
+                if not action and not value:
+                    message = await TodoService.list_pending(db, owner)
+                elif action in {"完成", "删除"}:
+                    message = await TodoService.change(db, owner, action, value)
+                elif action and not value:
+                    message = await TodoService.add(db, owner, action)
+                else:
+                    message = (
+                        "用法：\n/todo\n/todo <题目链接>\n"
+                        "/todo 完成 <编号>\n/todo 删除 <编号>"
+                    )
+        except TodoError as exc:
+            message = str(exc)
+        except Exception as exc:
+            logger.error("TODO command failed (%s)", type(exc).__name__)
+            message = "TODO 操作失败，请管理员检查数据库目录读写权限。"
         yield event.plain_result(message)
 
     async def terminate(self) -> None:

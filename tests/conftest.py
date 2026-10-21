@@ -25,6 +25,12 @@ class Event:
     def get_sender_id(self):
         return self.sender
 
+    def get_platform_id(self):
+        return self.unified_msg_origin.split(":", 1)[0]
+
+    def get_message_type(self):
+        return SimpleNamespace(value=self.unified_msg_origin.split(":", 2)[1])
+
     def stop_event(self):
         self.stopped = True
 
@@ -58,7 +64,7 @@ def plugin_class(monkeypatch, tmp_path):
     modules["astrbot.api.event"].AstrMessageEvent = Event
     modules["astrbot.api.event"].MessageEventResult = str
     modules["astrbot.api.event"].filter = SimpleNamespace(
-        command=lambda name: lambda handler: handler
+        command=lambda name, **kwargs: lambda handler: handler
     )
     modules["astrbot.api.star"].Context = object
     modules["astrbot.api.star"].Star = Star
