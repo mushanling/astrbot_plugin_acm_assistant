@@ -1,6 +1,6 @@
 # AstrBot ACM Assistant
 
-基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 ACM 助手插件，支持全部平台及单个平台的近期比赛查询与周赛管理。不包含机器人本体、定时推送、订阅或账号查询。
+基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的 ACM 助手插件，支持全部平台及单个平台的近期比赛查询、周赛管理与私聊个人题目 TODO。不包含机器人本体、定时推送、订阅或账号查询。
 
 ## 安装
 
@@ -26,7 +26,7 @@ https://github.com/mushanling/astrbot_plugin_acm_assistant
 py -3.12 scripts/package_plugin.py
 ```
 
-输出在 `dist/astrbot_plugin_acm_assistant-vX.Y.Z.zip`。压缩包内只有一个 `astrbot_plugin_acm_assistant/` 目录，包含 `main.py`、`training.py`、`metadata.yaml`、`_conf_schema.json`、`requirements.txt` 和 `README.md`，不包含 Git 元数据、工作流、凭据、测试或 SQLite 数据库。后续添加运行所需文件时，应同步更新 `scripts/package_plugin.py` 的打包文件列表。
+输出在 `dist/astrbot_plugin_acm_assistant-vX.Y.Z.zip`。压缩包内只有一个 `astrbot_plugin_acm_assistant/` 目录，包含 `main.py`、`training.py`、`todo.py`、`metadata.yaml`、`_conf_schema.json`、`requirements.txt` 和 `README.md`，不包含 Git 元数据、工作流、凭据、测试或 SQLite 数据库。后续添加运行所需文件时，应同步更新 `scripts/package_plugin.py` 的打包文件列表。
 
 ## 配置
 
@@ -56,6 +56,23 @@ py -3.12 scripts/package_plugin.py
 单平台指令仅请求该平台，不查询其他平台，也不会显示其他平台的错误提示。查询窗口固定为上表天数；旧版本的 `upcoming_days` 配置不再生效，升级后无需手动修改原配置文件。
 
 通过 AstrBot 配置的命令唤醒前缀调用；默认前缀通常为 `/`。只查询尚未开始、开始时间位于未来指定天数内的比赛，不包含正在进行或已结束的比赛。三个平台合并、去重、按开始时间排序，显示平台、标题、北京时间（固定 UTC+8）、时长和比赛链接。命令直接回复文本，不使用 LLM。
+
+## 个人 TODO（仅私聊）
+
+| 指令 | 功能 |
+| --- | --- |
+| `/todo` | 查看当前待办 |
+| `/todo <题目链接>` | 添加题目 |
+| `/todo 完成 1` | 将编号 1 标记完成 |
+| `/todo 删除 1` | 删除编号 1 的待办 |
+
+所有用户均可在私聊使用，无需管理员权限；群聊调用只提示转到私聊，不读取或修改个人列表。数据按 AstrBot 平台适配器 ID 和发送者 ID 隔离，不同平台或不同适配器的同号用户不共享数据。
+
+添加时保存 HTTP/HTTPS 题目链接，不抓取网页、查询做题状态或自动判定完成。展示内容为编号和链接；请直接提供一个不含空白的完整链接。域名大小写和默认端口会规范化，路径、查询参数与片段保留，以支持使用 `?id=...` 或 `#problem/A` 定位题目的链接。不同路径、参数、片段或 HTTP/HTTPS 协议的链接视为不同题目。
+
+同一用户重复添加当前待办时提示已存在；完成后从待办列表隐藏，再次发送同一链接可恢复待办并沿用原编号。删除会移除当前待办记录，之后可重新添加。编号是数据库持久化编号，全库唯一且不会重新排序，因此个人列表可能不连续；完成、删除时使用实际显示的编号。重复操作或不存在的编号不会影响其他题目。
+
+TODO 在现有 `contests.sqlite3` 中自动创建独立的 `todo_items` 表，与比赛缓存、周赛记录共存。重载、重启及正常插件更新保留数据；无需新增配置、API Key 或后台任务。
 
 ## 周赛系统
 
@@ -104,8 +121,11 @@ CLIST 使用 Authorization 请求头鉴权，分页固定访问 CLIST 域名；�
 
 开发验证：安装 `requirements.txt` 和 `pytest pytest-asyncio ruff` 后运行 `python -m pytest -q`、`ruff check .`、`ruff format --check .`。打包命令见上文。
 
+TODO 回归测试覆盖私聊限制、跨用户和跨平台隔离、重复添加、完成后恢复、删除、固定编号、并发操作、无效输入及重启持久化。测试使用模拟事件和临时 SQLite 数据库；真实 AstrBot 命令触发及 QQ 私聊展示需安装后联调。
+
 ## 更新记录
 
+- **v0.3.0**：新增仅限私聊的个人题目 TODO，支持查看、添加、完成、删除与已完成题目重新加入；按平台适配器和用户隔离，使用 SQLite 持久化固定编号，并更新帮助菜单和安装包文件列表。
 - **v0.2.3**：帮助指令统一改为 `/acmhelp`，取消 `/help` 和 `/acm帮助` 的注册。周赛查询、添加回执及删除列表统一显示开始时间和时长，列表移除“手动登记”和“自动 ABC”来源标记。
 - **v0.2.2**：新增 `/help` 菜单（别名 `/acm帮助`），列出比赛查询、周赛查询与周赛管理指令及权限说明。
 - **v0.2.1**：新增 `/牛客比赛`、`/atc比赛`、`/cf比赛`（简写 `/牛客`、`/atc`、`/cf`），查询指定平台未来 5 天的比赛；`/最近比赛` 改为查询所有平台未来 3 天的比赛，取代旧 `upcoming_days` 配置。保留比赛间空行及北京时间显示，并保留 v0.2.0 周赛功能。本次仅静态检查与打包，实际机器人联调待完成。
